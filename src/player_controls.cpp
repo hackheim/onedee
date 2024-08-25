@@ -18,7 +18,7 @@ void PlayerControls::tick() {
     if (trigger_timeout <= 0) {
         if (curr && !this->last) {
             this->trigger = 1;
-            this->trigger_timeout = 10;
+            this->trigger_timeout = 60;
         }
     } else {
         trigger_timeout -= 1;
@@ -31,4 +31,8 @@ void PlayerControls::tick() {
     }
 
     this->last = curr;
+}
+
+bool PlayerControls::in_timeout() {
+    return this->trigger_timeout > 0;
 }

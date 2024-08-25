@@ -11,6 +11,8 @@ class PlayerControls {
 
         void tick();
 
+        bool in_timeout();
+
     private:
         Bounce button;
         int last = 0;

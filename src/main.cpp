@@ -23,16 +23,21 @@ CRGB leds[NUM_LEDS];
 
 unsigned long next_frame = 0;
 
+bool p1_primed;
+bool p2_primed;
+
 class BoardRenderState {
     int player_1_deadzone_size;
     CRGB player_1_deadzone_color;
     int player_1_area_size;
     CRGB player_1_area_color;
+    bool player_1_primed;
 
     int player_2_deadzone_size;
     CRGB player_2_deadzone_color;
     int player_2_area_size;
     CRGB player_2_area_color;
+    bool player_2_primed;
 
     int ball_position;
     int ball_color;
@@ -79,8 +84,15 @@ void render_board() {
     int paddle_limit = paddle_size+DEADZONE_SIZE;
 
     // Player1 paddle
+    CRGB p1_paddle_color = PADDLE_COLOR;
+    if (p1_primed) {
+        p1_paddle_color = PADDLE_COLOR_PRIMED;
+    }
+    if (p1.in_timeout()) {
+        p1_paddle_color = PADDLE_COLOR_USED;
+    }
     for (int num = DEADZONE_SIZE-1; num < paddle_limit; num++) {
-        leds[num] = PADDLE_COLOR;
+        leds[num] = p1_paddle_color;
     }
     // Player1 deadzone
     for (int num = 0; num < DEADZONE_SIZE; num++) {
@@ -88,8 +100,15 @@ void render_board() {
     }
 
     // Player2 paddle
+    CRGB p2_paddle_color = PADDLE_COLOR;
+    if (p2_primed) {
+        p2_paddle_color = PADDLE_COLOR_PRIMED;
+    }
+    if (p2.in_timeout()) {
+        p2_paddle_color = PADDLE_COLOR_USED;
+    }
     for (int num = NUM_LEDS - paddle_limit; num < NUM_LEDS; num++) {
-        leds[num] = PADDLE_COLOR;
+        leds[num] = p2_paddle_color;
     }
     // Player2 deadzone
     for (int num = NUM_LEDS - DEADZONE_SIZE; num < NUM_LEDS; num++) {
@@ -111,7 +130,7 @@ void state_play() {
     int b1_hold_time = 0;
     int b2_hold_time = 0;
 
-    const float paddle_start = (((float)NUM_LEDS) / 2.0) - DEADZONE_SIZE - paddle_size;
+    const float paddle_start = (((float)NUM_LEDS) / 2.0) - DEADZONE_SIZE - paddle_size - GRACE_SIZE;
     const float deadzone_start = (((float)NUM_LEDS) / 2.0) - DEADZONE_SIZE;
 
     render_board();
@@ -122,15 +141,21 @@ void state_play() {
         p2.tick();
 
         // Check for triggers
-        if (p1.trigger) {
-            if (ball_position_f < -paddle_start && ball_velocity_f < 0) {
+        if (ball_position_f < -paddle_start && ball_velocity_f < 0) {
+            p1_primed = true;
+            if (p1.trigger) {
                 ball_velocity_f = abs(ball_velocity_f);
             }
+        } else {
+            p1_primed = false;
         }
-        if (p2.trigger) {
-            if (ball_position_f > paddle_start && ball_velocity_f > 0) {
+        if (ball_position_f > paddle_start && ball_velocity_f > 0) {
+            p2_primed = true;
+            if (p2.trigger) {
                 ball_velocity_f = -abs(ball_velocity_f);
             }
+        } else {
+            p2_primed = false;
         }
 
         // Apply acceleration and velocity
@@ -165,6 +190,9 @@ void state_spring() {
 
     render_board();
     leds[ball_position+1] = CRGB::White;
+
+    p1_primed = false;
+    p2_primed = false;
 
     const float drag = LAUNCH_SPRING_DRAG;
     const float springyness = LAUNCH_SPRING_SPRINGYNESS;
@@ -218,15 +246,26 @@ void state_game_over() {
 
     int counter = 0;
 
-    while (counter < 200) {
-        float animation_progress = counter / 1000.0;
+    while (counter < 80) {
+        float animation_progress = counter / 60.0;
+
+        render_board();
 
         for (int i = 0; i < NUM_LEDS; i++) {
             float rel_pos = (i / (float)NUM_LEDS);
-            float val = (sin(i / 0.3 + animation_progress * 800) + 1.0) * (sin(i / 1.0 + animation_progress * 300) + 1.0) * rel_pos;
 
-            int fin_val = (int)(val * 30);
-            leds[i] = CRGB(fin_val, fin_val, fin_val);
+            if (rel_pos < animation_progress) {
+                if (animation_progress - rel_pos < 0.1f) {
+                    float r = 1.0f / (animation_progress - rel_pos);
+                    leds[i].r += (int)(32.0f / r);
+                    leds[i].g += (int)(2.0f / r);
+                } else {
+                    int flash = 0;
+                    if (random(0, 4) == 0) flash = random(0, 20);
+                    leds[i] = CRGB(32 + flash, 2, 0);
+                }
+
+            }
         }
 
         FastLED.show();
@@ -235,28 +274,31 @@ void state_game_over() {
         frame();
     }
 
-    //for (int i = 0; i < 3; i++) {
-    //    for (int num = 0; num < NUM_LEDS; num++) {
-    //        leds[num] = CRGB::Black;
+    //counter = 0;
+    //while (counter < 100) {
+    //    float animation_progress = counter / 100.0;
+
+    //    render_board();
+
+    //    for (int i = 0; i < NUM_LEDS; i++) {
+    //        int flash = 0;
+    //        if (random(0, 4) == 0) flash = random(0, 20);
+
+    //        leds[i].r += (int)((32 + flash) / animation_progress);
+    //        leds[i].g += (int)((12) / animation_progress);
     //    }
+
     //    FastLED.show();
-
-    //    delay(500);
-
-    //    for (int num = 0; num < NUM_LEDS; num++) {
-    //        if (num <= NUM_LEDS / 2) {
-    //            leds[num] = CRGB(0, 20, 0);
-    //        } else {
-    //            leds[num] = CRGB(20, 0, 0);
-    //        }
-    //    }
-    //    FastLED.show();
-
-    //    delay(500);
+    //    counter++;
+    //    frame();
     //}
 
     ball_position_f = 0.0;
     ball_velocity_f = 0.0;
+
+    render_board();
+    FastLED.show();
+
     game_state = STATE_SPRING;
 }
 
@@ -270,11 +312,6 @@ void loop() {
         state_game_over();
     }
 
-    //leds[0] = CRGB::Red;
     FastLED.show();
     delay(2);
-
-    //leds[0] = CRGB::Black;
-    //FastLED.show();
-    //delay(500);
 }
